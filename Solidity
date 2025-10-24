@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract MockToken is ERC20 {
+    constructor(uint256 initialSupply) ERC20("MockToken", "MKT") {
+        _mint(msg.sender, initialSupply);
+    }
+}
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract LendingPool is Ownable {
+    IERC20 public token;
+    uint256 public totalDeposits;
+    mapping(address => uint256) public deposits;
+    mapping(address => uint256) public borrowings;
+
+    uint256 public depositRate = 500; // 5%
+    uint256 public borrowRate = 1000; // 10%
+
+    event Deposited(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event Borrowed(address indexed user, uint256 amount);
+    event Repaid(address indexed user, uint256 amount);
+
+    constructor(IERC20 _token) {
+        token = _token;
+    }
+
+    function deposit(uint256 amount) external {
+        require(amount > 0, "amount > 0");
+        token.transferFrom(msg.sender, address(this), amount);
+        deposits[msg.sender] += amount;
+        totalDeposits += amount;
+        emit Deposited(msg.sender, amount);
+    }
+
+    function withdraw() external {
+        uint256 amount = deposits[msg.sender];
+        require(amount > 0, "nothing to withdraw");
+        uint256 interest = (amount * depositRate) / 10000;
+        uint256 payout = amount + interest;
+        deposits[msg.sender] = 0;
+        token.transfer(msg.sender, payout);
+        emit Withdrawn(msg.sender, payout);
+    }
+
+    function borrow(uint256 amount) external {
+        require(amount > 0, "amount > 0");
+        require(token.balanceOf(address(this)) >= amount, "insufficient liquidity");
+        borrowings[msg.sender] += amount;
+        token.transfer(msg.sender, amount);
+        emit Borrowed(msg.sender, amount);
+    }
+
+    function repay(uint256 amount) external {
+        require(amount > 0, "amount > 0");
+        token.transferFrom(msg.sender, address(this), amount);
+        borrowings[msg.sender] -= amount;
+        emit Repaid(msg.sender, amount);
+    }
+}
